@@ -11,7 +11,7 @@ fps = 60
 
 # network setup
 HOST = "127.0.0.1"
-PORT = 5555
+PORT = 25565
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 class Grid():
@@ -201,7 +201,7 @@ class OtherPlayer():
         vertices = self.calculate_polygon(self.rotation, self.x, self.y)
 
         # Draw the rotated polygon
-        pygame.draw.polygon(screen, self.color, vertices)
+        pygame.draw.polygon(screen, self.color, vertices, 4)
 
     def calculate_polygon(self, rot, x_calc, y_calc):
         # Calculate the half-size of the square
@@ -242,6 +242,7 @@ def update():
     screen.fill((255, 255, 255))
     grid.draw()
     player.update(grid)
+    other_player.update()
     for bullet in bullets:
         bullet.update(grid)
     pygame.display.flip()
@@ -262,45 +263,54 @@ def receive_start_data(): # assigning players color and position
     while not start:
         try:
             data = client.recv(1024).decode()
-            data.split(";") # using ; as a delimiter
+            data = data.split(";") # using ; as a delimiter
+
 
             if data[0] == "start":
                 # this assumes data is "start;x;y;rotation;r;g;b;x;y;rotation;r;g;b"
                 player = Player(int(data[1]), int(data[2]), int(data[3]), (int(data[4]), int(data[5]), int(data[6])), 2)
                 other_player = OtherPlayer(int(data[7]), int(data[8]), int(data[9]), (int(data[10]), int(data[11]), int(data[12])))
                 start = True # this should end this thread
-        except:
-            print("Error receiving data...")
-            print(data)
+                print("players created game start")
+        except Exception as e:
+            print(e)
             break
 
 def receive_game_data(): # when the game is started, recieve the other player's data and update the game
     global bullets, other_player, start
     while True:
-        if not start:
+        if start:
             try:
                 data = client.recv(1024).decode()
-                data.split(";") # using ; as a delimiter
+                data = data.split(";") # using ; as a delimiter
 
                 if data[0] == "update":    
 
                     # assumes data is "update;x;y;rotation;bullets"
+                    print(data)
 
-                    other_player.x = data[1]
-                    other_player.y = data[2]
-                    other_player.rotation = data[3]
-                    bullets = data[4] # the server will handle the synchronization of the bullets
-            except:
+                    other_player.x = float(data[1])
+                    other_player.y = float(data[2])
+                    other_player.rotation = int(data[3])
+                    #bullets = data[4] # the server will handle the synchronization of the bullets
+            except Exception as e:
                 print("Error receiving data...")
-                print(data)
+                
+                print(e)
+
                 break
 
 def send_data():
     global player, bullets, start
     while True:
         if start:
-            data = f"update;{player.x};{player.y};{player.rotation};{bullets}"
-            client.send(data.encode())
+            try:
+                data = f"update;{player.x};{player.y};{player.rotation};{bullets};"
+                client.send(data.encode())
+            except Exception as e:
+                print("Error sending data:", e)
+                break
+
 
 client.connect((HOST, PORT)) # connect to the server
 
@@ -325,6 +335,8 @@ while running:
         pygame.display.flip()
         
     if start:
+        print(player.x)
+        print(player.y)
         keys = pygame.key.get_pressed()
         if keys[pygame.K_SPACE]:
             player.shoot()

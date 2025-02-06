@@ -2,7 +2,7 @@ import socket
 import threading
 
 HOST = "127.0.0.1"
-PORT = 5555
+PORT = 25565
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((HOST, PORT))
@@ -35,9 +35,12 @@ def handle_client(conn, addr):
                 break
 
             if len(clients) != 2: # check if there are 2 clients connected
+                print("clients: ", len(clients))
+                for client_addr, client_conn in clients.items():
+                    print(f'client: {client_addr}')
                 continue
 
-            if data[0] == "start":
+            if data == "start" and len(clients) == 2:
                 idx = 0
                 for client_addr, client_conn in clients.items():
                     if idx == 0:
@@ -53,16 +56,20 @@ def handle_client(conn, addr):
                         other = other[0]
 
                         # this assumes data is "start;x;y;rotation;r;g;b;x;y;rotation;r;g;b"
-                        
+                        start_data_send = f"start;{players[addr].x};{players[addr].y};{players[addr].rotation};{players[addr].color[0]};{players[addr].color[1]};{players[addr].color[2]};{players[other].x};{players[other].y};{players[other].rotation};{players[other].color[0]};{players[other].color[1]};{players[other].color[2]};"
+                        client_conn.send(start_data_send.encode())
+                    else:
+                        # since we're using two threads, we dont need to send the start data to the other client in this thread
+                        pass
 
-                        
+                print("game started (hopefully)")
 
             data = data.split(";")
 
             if data[0] == "update":
                 # update data is in the format "update;x;y;rotation;bullets"
-                players[addr].x = int(data[1])
-                players[addr].y = int(data[2])
+                players[addr].x = float(data[1])
+                players[addr].y = float(data[2])
                 players[addr].rotation = int(data[3])
 
                 # ignoring bullets for now
@@ -70,7 +77,10 @@ def handle_client(conn, addr):
                 # Broadcast the received data to all clients
                 for client_addr, client_conn in clients.items():
                     if client_addr != addr:
-                        client_conn.send(f"update;{players[addr].x};{players[addr].y};{players[addr].rotation}".encode())
+                        client_conn.send(f"update;{players[addr].x};{players[addr].y};{players[addr].rotation};{synced_bullets};".encode())
+                        # adding the semicolon at the end is important for the client to know when to stop reading data
+
+                print("updated player data")
         except:
             break
 
