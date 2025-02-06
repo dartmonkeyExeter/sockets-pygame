@@ -38,6 +38,8 @@ class Player():
         self.rotation = rotation
         self.speed = speed
         self.color = color
+        self.bullet_cooldown = 0.25
+        self.time_elapsed = 0
         self.size = 30
         
     def move(self, grid):
@@ -212,11 +214,20 @@ class Player():
         self.move(grid)
         self.draw()
 
+def gen_id():
+    # uuid isnt working, get the lowest number that isnt in the list
+    id = 0
+    for bullet in bullets:
+        if bullet.id == id:
+            id += 1
+    return id
+
 class Bullet():
-    def __init__(self, x, y, rotation):
+    def __init__(self, x, y, rotation, id=gen_id()):
         self.x = x
         self.y = y
         self.rotation = rotation
+        self.id = id
         
     def move(self, grid):
         self.x += 10 * math.cos(math.radians(self.rotation))
@@ -236,6 +247,8 @@ class Bullet():
     def update(self, grid):
         self.move(grid)
         self.draw()
+
+
 
 class OtherPlayer():
     def __init__(self, x, y, rotation, color):
@@ -333,17 +346,20 @@ def receive_start_data(): # assigning players color and position
     while not start:
         try:
             data = client.recv(1024).decode()
-            data = data.split(";") # using ; as a delimiter
+            dtype = data.split("[")[0]
+            data = data.split("[")[1] # using ; as a delimiter
+            data = data.split(";") # split the data
 
 
-            if data[0] == "start":
+            if dtype == "start":
                 # this assumes data is "start;x;y;rotation;r;g;b;x;y;rotation;r;g;b"
-                player = Player(int(data[1]), int(data[2]), int(data[3]), (int(data[4]), int(data[5]), int(data[6])), 2)
-                other_player = OtherPlayer(int(data[7]), int(data[8]), int(data[9]), (int(data[10]), int(data[11]), int(data[12])))
+                player = Player(int(data[0]), int(data[1]), int(data[2]), (int(data[3]), int(data[4]), int(data[5])), 2)
+                other_player = OtherPlayer(int(data[6]), int(data[7]), int(data[8]), (int(data[9]), int(data[10]), int(data[11])))
                 start = True # this should end this thread
                 print("players created game start")
         except Exception as e:
             print(e)
+            print("error line 350")
             break
 
 def receive_game_data(): # when the game is started, recieve the other player's data and update the game
@@ -352,20 +368,46 @@ def receive_game_data(): # when the game is started, recieve the other player's 
         if start:
             try:
                 data = client.recv(1024).decode()
-                data = data.split(";") # using ; as a delimiter
+                dtype = data.split("[")[0]
 
-                if data[0] == "update":    
+                print("data:", data)
 
-                    # assumes data is "update;x;y;rotation;bullets"
-                    print(data)
+                if dtype == "update":
+                    data = data.split("[")[1] # using ; as a delimiter
+                    recv_bullets = data.split(":")[0] # split the bullets from the main data
+                    recv_bullets = recv_bullets.split("#") # split the bullets individually
+                    data = data.split(";") # split the data
 
-                    other_player.x = float(data[1])
-                    other_player.y = float(data[2])
-                    other_player.rotation = int(data[3])
-                    #bullets = data[4] # the server will handle the synchronization of the bullets
+                    print("data:", data)
+
+                    other_player.x = float(data[0])
+                    other_player.y = float(data[1])
+                    other_player.rotation = int(data[2])
+
+
+                    for rb in recv_bullets:
+                        if rb != "":
+                            rb = rb.split(";")
+                            id = rb[0]
+
+                            found = False
+
+                            for i in range(len(bullets) - 1):
+                                b = bullets[i]
+                                if b.id == id:
+                                    b.x = float(rb[1])
+                                    b.y = float(rb[2])
+                                    b.rotation = int(rb[3])
+                                    found = True
+                                    break
+                            
+                            if not found:
+                                bullet = Bullet(float(rb[1]), float(rb[2]), int(rb[3]))
+                                bullets.append(bullet)
+                    
             except Exception as e:
                 print("Error receiving data...")
-                
+                print("data:", data)
                 print(e)
 
                 break
@@ -375,7 +417,11 @@ def send_data():
     while True:
         if start:
             try:
-                data = f"update;{player.x};{player.y};{player.rotation};{bullets};"
+                bullet_data = ""
+                for bullet in bullets:
+                    # bullet data is in the format "id;x;y;rotation"
+                    bullet_data += f"{bullet.id};{bullet.x};{bullet.y};{bullet.rotation};#"
+                data = f"update[{player.x};{player.y};{player.rotation};:{bullet_data}:]"
                 client.send(data.encode())
             except Exception as e:
                 print("Error sending data:", e)
@@ -406,9 +452,13 @@ while running:
         
     if start:
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_SPACE]:
+        
+        player.time_elapsed += 1 / fps
+
+        if keys[pygame.K_SPACE] and player.time_elapsed >= player.bullet_cooldown:
             player.shoot()
-                    
+            player.time_elapsed = 0
+
         update()
     
 pygame.quit()
