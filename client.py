@@ -18,10 +18,10 @@ class Grid():
     def __init__(self):
         self.grid =["########",
                     "#      #",
-                    "#      #",
-                    "#      #",
-                    "#      #",
-                    "#      #",
+                    "#   #  #",
+                    "#  #   #",
+                    "#   #  #",
+                    "#  #   #",
                     "#      #",
                     "########"]
         
@@ -38,6 +38,7 @@ class Player():
         self.rotation = rotation
         self.speed = speed
         self.color = color
+        self.size = 30
         
     def move(self, grid):
         keys = pygame.key.get_pressed()
@@ -80,6 +81,31 @@ class Player():
             grid_x, grid_y = int(vertex[0] / 50), int(vertex[1] / 50)
             if grid.grid[grid_y][grid_x] == "#":
                 return True  # Collision detected
+
+        # we should also check the players rect hit box, in addition to the vertices
+        # this is to account for outward-facing corners
+
+        half_size = (self.size / 2) + 2 # add for a buffer
+        rect_left   = x - half_size
+        rect_top    = y - half_size
+        rect_right  = x + half_size
+        rect_bottom = y + half_size
+
+        # Convert the hitbox boundaries to grid indices. 
+        # (Assuming each grid cell is 50x50 pixels.)
+        grid_left   = int(rect_left / 50)
+        grid_right  = int(rect_right / 50)
+        grid_top    = int(rect_top / 50)
+        grid_bottom = int(rect_bottom / 50)
+
+        # Iterate over all grid cells covered by the hitbox.
+        for grid_y in range(grid_top, grid_bottom + 1):
+            for grid_x in range(grid_left, grid_right + 1):
+                # Make sure we don't go out of bounds on the grid.
+                if 0 <= grid_y < len(grid.grid) and 0 <= grid_x < len(grid.grid[0]):
+                    if grid.grid[grid_y][grid_x] == "#":
+                        return True  # Collision detected
+        
         return False  # No collision
 
     def handle_rotation(self, grid, direction):
@@ -130,10 +156,31 @@ class Player():
 
         # Draw the rotated polygon
         pygame.draw.polygon(screen, self.color, vertices, 4)
+        # draw a little black box as turret
+        width = 5
+        height = 25
+        offset = 10
+
+        # Define the vertices of the square relative to the center
+        vertices = [
+            ((-width / 2), (-height / 2) - offset),
+            ((width / 2), (-height / 2) - offset),
+            ((width / 2), (height / 2) - offset),
+            ((-width / 2), (height / 2) - offset)
+        ]
+
+        angle = math.radians(self.rotation + 90)
+        rotated_vertices = []
+        for x, y in vertices:
+            new_x = x * math.cos(angle) - y * math.sin(angle)
+            new_y = x * math.sin(angle) + y * math.cos(angle)
+            rotated_vertices.append((new_x + self.x, new_y + self.y))
+        
+        pygame.draw.polygon(screen, (0, 0, 0), rotated_vertices)
         
     def calculate_polygon(self, rot, x_calc, y_calc):
         # Calculate the half-size of the square
-        half_size = 50 / 2
+        half_size = self.size / 2
 
         # Define the vertices of the square relative to the center
         vertices = [
@@ -196,6 +243,7 @@ class OtherPlayer():
         self.y = y
         self.rotation = rotation
         self.color = color
+        self.size = 30
 
     def draw(self):
         vertices = self.calculate_polygon(self.rotation, self.x, self.y)
@@ -203,9 +251,31 @@ class OtherPlayer():
         # Draw the rotated polygon
         pygame.draw.polygon(screen, self.color, vertices, 4)
 
+                # draw a little black box as turret
+        width = 5
+        height = 25
+        offset = 10
+
+        # Define the vertices of the square relative to the center
+        vertices = [
+            ((-width / 2), (-height / 2) - offset),
+            ((width / 2), (-height / 2) - offset),
+            ((width / 2), (height / 2) - offset),
+            ((-width / 2), (height / 2) - offset)
+        ]
+
+        angle = math.radians(self.rotation + 90)
+        rotated_vertices = []
+        for x, y in vertices:
+            new_x = x * math.cos(angle) - y * math.sin(angle)
+            new_y = x * math.sin(angle) + y * math.cos(angle)
+            rotated_vertices.append((new_x + self.x, new_y + self.y))
+        
+        pygame.draw.polygon(screen, (0, 0, 0), rotated_vertices)
+
     def calculate_polygon(self, rot, x_calc, y_calc):
         # Calculate the half-size of the square
-        half_size = 50 / 2
+        half_size = self.size / 2
 
         # Define the vertices of the square relative to the center
         vertices = [
@@ -335,8 +405,6 @@ while running:
         pygame.display.flip()
         
     if start:
-        print(player.x)
-        print(player.y)
         keys = pygame.key.get_pressed()
         if keys[pygame.K_SPACE]:
             player.shoot()
