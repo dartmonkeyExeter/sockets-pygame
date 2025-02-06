@@ -310,11 +310,11 @@ bullets = []
 
 def update():
     screen.fill((255, 255, 255))
-    grid.draw()
     player.update(grid)
     other_player.update()
     for bullet in bullets:
         bullet.update(grid)
+    grid.draw()
     pygame.display.flip()
 
 start = False # only start the game when the server says to
